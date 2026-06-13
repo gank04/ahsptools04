@@ -124,6 +124,13 @@ import {
   CheckCircle2, Pencil, Layers, Sparkles, ChevronRight,
 } from 'lucide-react';
 
+import {
+  subscribeMaterials, saveMaterial, deleteMaterial,
+  subscribeTemplates, saveTemplate, deleteTemplate,
+  subscribeBoq, saveBoqItem, deleteBoqItem,
+  saveProject,
+} from './firebase.js';
+
 /* ── Kontrak tipe (TypeScript-ready via JSDoc) ─────────────────────────── */
 /** @typedef {'ADMIN'|'ESTIMATOR'|'CLIENT'} Role */
 /** @typedef {{id:string, code:string, name:string, unit:string, type:'BAHAN'|'UPAH', basePrice:number}} Material */
@@ -1343,6 +1350,9 @@ function Shell() {
    diturunkan dengan useMemo sehingga: ganti zona → harga material berubah →
    HSP semua AHSP berubah → total RAB & kartu ringkasan ikut berubah, instan.
    ════════════════════════════════════════════════════════════════════════════ */
+
+// ID proyek untuk Firebase
+const PROJECT_ID = 'proyek-001';
 export default function AhspRabStudio() {
   const [projectName, setProjectName] = useState('Rumah Tinggal 2 Lantai — Yogyakarta');
   const [zoneId, setZoneId] = useState('diy');
@@ -1366,6 +1376,48 @@ export default function AhspRabStudio() {
     if (toastT.current) clearTimeout(toastT.current);
     toastT.current = setTimeout(() => setToast(''), 3400);
   };
+
+  // ── Firebase: Real-time listener untuk materials ──
+  useEffect(() => {
+    const unsubscribeMaterials = subscribeMaterials(PROJECT_ID, (data) => {
+      if (data.length > 0) {
+        setMaterials(data);
+      } else {
+        setMaterials(SEED_MATERIALS);
+      }
+    });
+    return () => unsubscribeMaterials();
+  }, []);
+
+  // ── Firebase: Real-time listener untuk templates ──
+  useEffect(() => {
+    const unsubscribeTemplates = subscribeTemplates(PROJECT_ID, (data) => {
+      if (data.length > 0) {
+        setTemplates(data.map((t) => ({
+          ...t,
+          components: (t.components || []).map((c) => ({ ...c, key: c.key || uid('c') })),
+        })));
+      } else {
+        setTemplates(
+          SEED_TEMPLATES.map((t) => ({ ...t, components: t.components.map((c) => ({ ...c, key: uid('c') })) }))
+        );
+      }
+    });
+    return () => unsubscribeTemplates();
+  }, []);
+
+  // ── Firebase: Real-time listener untuk BoQ ──
+  useEffect(() => {
+    const unsubscribeBoq = subscribeBoq(PROJECT_ID, (data) => {
+      if (data.length > 0) {
+        setBoq(data);
+      } else {
+        setBoq(SEED_BOQ);
+      }
+    });
+    return () => unsubscribeBoq();
+  }, []);
+
 
   const zone = ZONES.find((z) => z.id === zoneId) || ZONES[0];
   const canEdit = role !== 'CLIENT';
@@ -1422,9 +1474,16 @@ export default function AhspRabStudio() {
     setMaterials((ms) => ms.filter((m) => m.id !== id));
     notify('Material dihapus.');
   };
-  const importMaterials = (items) => {
-    setMaterials((ms) => [...items, ...ms]);
-    notify(`${items.length} item berhasil diimpor via AI mapping.`);
+  const importMaterials = async (items) => {
+    try {
+      for (const item of items) {
+        await saveMaterial(PROJECT_ID, item);
+      }
+      setMaterials((ms) => [...items, ...ms]);
+      notify(`✅ ${items.length} material berhasil diimpor`);
+    } catch (err) {
+      notify('❌ Gagal impor material');
+    }
   };
 
   /* ── Mutator: Template AHSP ── */
