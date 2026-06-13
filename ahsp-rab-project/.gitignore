@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+MDEOF
+
+echo "README.md & .gitignore updated"
+find /home/claude/ahsp-rab-project -type f | sort
